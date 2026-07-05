@@ -470,6 +470,33 @@ ${product}到底值不值？直接看${pet}的真实反应
 ${product}真实体验，不只说卖点，也看宠物愿不愿意用。#宠物用品 #养宠好物`;
 }
 
+const creativeTemplates = [
+  { title:"结果前置", pet:"通用", category:"通用", hook:"先展示最意外的使用结果，再解释过程。", emotion:"惊讶与好奇", structure:"结果钩子 → 使用前问题 → 真实过程 → 结果复现", selling_points:"用可见结果承接卖点", closing:"让用户按自身需求查看详情" },
+  { title:"反常识避坑", pet:"通用", category:"通用", hook:"指出用户最容易忽略或做错的一件事。", emotion:"轻度焦虑与获得感", structure:"错误认知 → 真实测试 → 正确选择 → 避坑总结", selling_points:"卖点作为正确方案出现", closing:"先确认适用条件再选择" },
+  { title:"宠物第一反应", pet:"通用", category:"通用", hook:"不介绍商品，先记录宠物第一次接触的反应。", emotion:"期待与真实感", structure:"宠物反应 → 商品揭晓 → 细节实拍 → 主人结论", selling_points:"用宠物行为证明接受度", closing:"强调个体差异，理性选择" },
+  { title:"同价对比", pet:"通用", category:"通用", hook:"同样预算，两种选择到底差在哪里？", emotion:"怕买错与确定感", structure:"价格锚点 → 三项对比 → 使用反馈 → 选择建议", selling_points:"用统一条件突出差异", closing:"建议用户自行比较规格" },
+  { title:"一天真实记录", pet:"通用", category:"通用", hook:"把商品放进真实养宠一天，不单独拍广告。", emotion:"陪伴与生活感", structure:"早晨问题 → 白天使用 → 晚上结果 → 一天总结", selling_points:"在自然场景中反复露出", closing:"适合相同生活场景的人群" },
+  { title:"限时挑战", pet:"通用", category:"通用", hook:"设定10秒、10分钟或7天挑战目标。", emotion:"悬念与结果满足", structure:"挑战规则 → 计时过程 → 意外节点 → 结果公布", selling_points:"通过挑战过程展示性能", closing:"邀请用户评论预测结果" },
+];
+
+function randomIndex(max) {
+  if (globalThis.crypto?.getRandomValues) {
+    const value = new Uint32Array(1);
+    crypto.getRandomValues(value);
+    return value[0] % max;
+  }
+  return Math.floor(Math.random() * max);
+}
+
+function shuffled(items) {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = randomIndex(i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 function matchTemplates(data) {
   const text = `${data.product || ""} ${data.selling || ""} ${data.pet || ""}`;
   const categoryRules = [
@@ -479,17 +506,13 @@ function matchTemplates(data) {
     ["玩具", /玩具|逗猫|磨牙|漏食|猫抓|放电/],
   ];
   const matchedCategory = categoryRules.find(([, rule]) => rule.test(text))?.[0];
-  return templates
-    .map(template => {
-      let score = 0;
-      if (matchedCategory && template.category === matchedCategory) score += 10;
-      if (template.pet === data.pet || template.pet === "通用") score += 3;
-      if (text.includes(template.category)) score += 4;
-      return { template, score };
-    })
-    .sort((a, b) => b.score - a.score || a.template.id - b.template.id)
-    .slice(0, 3)
-    .map(item => item.template);
+  const categoryPool = templates.filter(template =>
+    (!matchedCategory || template.category === matchedCategory) &&
+    (template.pet === data.pet || template.pet === "通用" || data.pet === "猫狗通用")
+  );
+  const primary = shuffled(categoryPool).slice(0, 2);
+  const creative = shuffled(creativeTemplates).slice(0, 1);
+  return shuffled([...primary, ...creative]);
 }
 
 function templateContext(items) {
@@ -530,6 +553,16 @@ function enforceContentConsistency(type, data, original) {
     content = `## 当前商品\n${data.product}\n\n${content}`;
   }
   return { content, corrected: content !== original };
+}
+
+function randomizeRuleVersions(content) {
+  const versions = content.match(/## 版本[一二三][\s\S]*?(?=## 版本[一二三]|## 发布文案|$)/g);
+  if (!versions || versions.length < 2) return content;
+  const suffix = content.match(/## 发布文案[\s\S]*$/)?.[0] || "";
+  const labels = ["一", "二", "三"];
+  return shuffled(versions).map((section, index) =>
+    section.replace(/^## 版本[一二三]/, `## 版本${labels[index]}`)
+  ).join("\n\n") + (suffix ? `\n\n${suffix}` : "");
 }
 
 function toolPage(type) {
@@ -583,7 +616,7 @@ function templatesPage() {
 function libraryPage() {
   const cats = ["全部", ...copyLibrary.categories.map(item => item.name)];
   const visible = state.libraryFilter === "全部" ? copyLibrary.scripts : copyLibrary.scripts.filter(item => item.category === state.libraryFilter);
-  return `${pageIntro("9 个品类 · 270 条可直接拍","宠物带货文案库","每个品类 30 条 JSON 结构化脚本，支持筛选、查看、复制和载入生成器。")}
+  return `${pageIntro("9 个品类 · 540 条可直接拍","宠物带货文案库","每个品类 60 条 JSON 结构化脚本，支持筛选、查看、复制和载入生成器。")}
     <div class="library-summary">当前显示 <b>${visible.length}</b> 条 · 全库共 ${copyLibrary.total} 条</div>
     <div class="filter-row">${cats.map(c => `<button data-library-filter="${c}" class="${state.libraryFilter === c ? "active" : ""}">${c}</button>`).join("")}</div>
     <div class="template-grid">${visible.map(item => `<article class="template-card" data-library-id="${item.id}">
@@ -713,6 +746,7 @@ async function handleGenerate(event) {
     const matched = matchTemplates(data);
     data.matched_templates = matched.map(item => item.title);
     data.template_context = templateContext(matched);
+    data.creative_seed = `${Date.now()}-${randomIndex(100000)}`;
   }
   const configMap = {
     analyze: [d => `拆解短视频：${d.content}`, d => toolPage],
@@ -735,7 +769,7 @@ async function handleGenerate(event) {
 系统已从模板库自动匹配以下3个参考模板：
 ${d.template_context}
 
-三个版本分别借鉴一个模板的核心结构，但必须围绕当前商品重新创作，不能机械复制模板原句。必须写可直接拍摄和直接念出的完整文案，不能只写策划说明。每个时间段必须包含时间、具体画面、逐字口播和屏幕字幕；每个版本必须包含开头3秒钩子、完整中段、卖点自然植入、结尾转化话术。生成前执行一致性检查：商品是“${d.product}”，宠物是“${d.pet}”；猫咪商品不得出现狗、狗粮、遛狗等内容，狗狗商品不得出现猫砂、猫罐头等内容。`,
+本次创意种子：${d.creative_seed}。即使输入与上次相同，也必须更换开头措辞、场景动作、情绪推进和结尾话术，禁止复用上一次的固定句式。三个版本分别借鉴一个模板的核心结构，但必须围绕当前商品重新创作，不能机械复制模板原句。必须写可直接拍摄和直接念出的完整文案，不能只写策划说明。每个时间段必须包含时间、具体画面、逐字口播和屏幕字幕；每个版本必须包含开头3秒钩子、完整中段、卖点自然植入、结尾转化话术。生成前执行一致性检查：商品是“${d.product}”，宠物是“${d.pet}”；猫咪商品不得出现狗、狗粮、遛狗等内容，狗狗商品不得出现猫砂、猫罐头等内容。`,
       demo: buildScriptDemo,
     },
     persona: {
@@ -754,6 +788,7 @@ ${d.template_context}
       data.content = `${data.content ? `${data.content}\n\n` : ""}[视频语音转写]\n${transcript}`;
     }
     const output = await generateWithAI(generators[type].prompt(data), () => generators[type].demo(data), frames);
+    if (output.demo && type === "script") output.content = randomizeRuleVersions(output.content);
     const consistency = enforceContentConsistency(type, data, output.content);
     output.content = consistency.content;
     const matchNotice = type === "script" && data.matched_templates?.length
